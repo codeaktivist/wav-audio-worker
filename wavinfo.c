@@ -100,14 +100,14 @@ int main(int argc, char *argv[])
     printf("Format ID:  %s\n", formatChunk);
 
     // Check format length
-    uint16_t fmtlength;
-    fread(&fmtlength, sizeof(uint16_t), 1, audiofile);
+    uint32_t fmtlength;
+    fread(&fmtlength, sizeof(uint32_t), 1, audiofile);
     printf("fmt length: %i Bytes\n", fmtlength);
 
     // Check format tag: 0x0001 -> PCM
     uint16_t wFormatTag;
     fread(&wFormatTag, sizeof(uint16_t), 1, audiofile);
-    if (wFormatTag != 0)
+    if (wFormatTag != 1)
     {
         printf("Only PCM files are supported: wFormatTag = %i\n", wFormatTag);
         return 2;
@@ -123,5 +123,30 @@ int main(int argc, char *argv[])
     uint32_t dwSamplesPerSec;
     fread(&dwSamplesPerSec, sizeof(uint32_t), 1, audiofile);
     printf("Samplerate: %i\n", dwSamplesPerSec);
-    
+
+    // Get average bytes per second, e.g. 2 X 16 * 44100 / 8
+    uint32_t dwAvgBytesPerSec;
+    fread(&dwAvgBytesPerSec, sizeof(uint32_t), 1, audiofile);
+    printf("Average Bytes / sec: %i\n", dwAvgBytesPerSec);
+
+    // Get block allign
+    uint16_t wBlockAlign;
+    fread(&wBlockAlign, sizeof(uint16_t), 1, audiofile);
+    printf("Block align: %x\n", wBlockAlign);
+
+    // Get block allign
+    uint16_t bitspersample;
+    fread(&bitspersample, sizeof(uint16_t), 1, audiofile);
+    printf("bitspersample: %x\n", bitspersample);
+
+    char padChunk[5];
+    padChunk[4] = '\0';
+    fread(padChunk, sizeof(char), 4, audiofile);
+    if (strcmp(padChunk, "fmt ") != 0)
+    {
+        printf("Wrong format-chunk found (fmt ): %s\n", padChunk);
+        return 2;
+    }
+    printf("padChunk ID:  %s\n", padChunk);
+
 }
