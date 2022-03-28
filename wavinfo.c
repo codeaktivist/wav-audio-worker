@@ -1,28 +1,113 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
-// Aliases for primitive data types
+// Aliases for primitive data types based on ms specifications
 typedef uint8_t  BYTE;
+typedef uint8_t  CHAR;
+typedef uint16_t WORD;
 typedef uint32_t DWORD;
 typedef int32_t  LONG;
-typedef uint16_t WORD;
 
-typedef struct
+// Chunks are the building blocks of RIFF
+// typedef struct ck
+// {
+//     DWORD ckID;             // Chunk type identifier
+//     DWORD ckSize;           // Chunk size field (size of ckData)
+//     BYTE ckData[];          // Chunk data, flexible array member
+// } ck;
+
+// Format Chunk
+typedef struct fmt
 {
-    DWORD ckID;
-    DWORD ckSize;
-    //BYTE ckData[ckSize];
-} broadcast_audio_extension;
+    WORD wFormatTag;        // Format category
+    WORD nChannels;         // Number of channels
+    DWORD nSamplesPerSec;   // Sampling rate
+    DWORD nAvgBytesPerSec;  // For buffer estimation
+    WORD nBlockAlign;       // Data block size
+} fmt;
+
+// Broadcast wave file chunk (optional extension)
+typedef struct bext
+{
+    CHAR Description[256];          // Description of the sound sequence
+    CHAR Originator[32];            // Name of the originator
+    CHAR OriginatorReference[32];   // Reference of the originator
+    CHAR OriginationDate[10];       // yyyy:mm:dd
+    CHAR OriginationTime[8];        // hh:mm:ss
+    DWORD TimeReferenceLow;         // First sample count since midnight, low word
+    DWORD TimeReferenceHigh;        // First sample count since midnight, high word
+    WORD Version;                   // Version of the BWF; unsigned binary number
+    BYTE UMID[64];                  // Binary bytes of SMPTE UMID
+    WORD LoudnessValue;             // Integrated Loudness Value of the file in LUFS (multiplied by 100)
+    WORD LoudnessRange;             // Loudness Range of the file in LU (multiplied by 100)
+    WORD MaxTruePeakLevel;          // Maximum True Peak Level of the file expressed as dBTP (multiplied by 100)
+    WORD MaxMomentaryLoudness;      // Highest value of the Momentary Loudness Level of the file in LUFS (multiplied by 100)
+    WORD MaxShortTermLoudness;      // Highest value of the Short-Term Loudness Level of the file in LUFS (multiplied by 100)
+    BYTE Reserved[180];             // 180 bytes, reserved for future use, set to “NULL”
+    CHAR CodingHistory[];           // History coding, flexible array member
+} bext;
+
+
+// Helper functions
+const char* printbyte(BYTE unprintable[], int len)
+{
+    char* printable = malloc(len * sizeof(CHAR));
+    for (int i = 0; i < len; i++)
+    {
+        printable[i] = unprintable[i];
+    }
+    printable[len] = '\0';
+    return printable;
+}
+
+const char* printstring(CHAR *unprintable, int len)
+{
+    char* printable = malloc((sizeof(CHAR) + 1) * len);
+    int last_printable = 0;
+    for (int i = 0; i < len; i++)
+    {
+        printable[i] = unprintable[i];
+
+        // Track position of terminating NUL, there is one
+        if (unprintable[i] != '\0')
+        {
+            last_printable = i;
+        }
+    }
+    // Append NUL to end of printable string
+    printable[last_printable + 1] = '\0';
+
+    return printable;
+}
 
 int main(int argc, char *argv[])
 {
+
+    printf("\n========================================\n");
+    printf("    wavinfo -> analysing your file    \n");
+    printf("========================================\n\n");
+
+    
+    // Check command line arguments, retrieve filepath
+    char *filepath;
+    if (argc != 2)
+    {
+        printf("\nMissing or too many comand line arguments!\n");
+        printf("Usage: ./wavinfo yourfile.wav\n\n");
+        return 1;
+    }
+    else
+    {
+        filepath = argv[1];
+    }
+
     // Open audiofile
-    char *filepath = "Glas.wav";
     FILE *audiofile = fopen(filepath, "r");
     if (audiofile == NULL)
     {
-        printf("Could not open file %s\n", filepath);
+        printf("\nCould not open file: %s\n\n", filepath);
         return 1;
     }
 
@@ -64,89 +149,111 @@ int main(int argc, char *argv[])
     // Chunks are defined by ckID and ckSize followed by the ckData with a length of ckSize
     // Consume Chunk, analyse chID and call according reader function
 
-
-
-    // char chunkID[5];
-    // chunkID[4] = '\0';
-    // fread(&chunkID, sizeof(char), 4, audiofile);
-    // if (strcmp(chunkID, "bext") == 0)
-    // {
-    //     // Bext Chunk for Broadcast Wave Format
-    //     printf("\nBroadcast Wave Format Information:\n\n");
-    // }
-    // else if (strcmp(chunkID, "fmt ") == 0)
-    // {
-    //     printf("\nWave Header Information:\n\n");
-    // }
-    // printf("%s", chunkID);
-    // return 0;
-
-
-    // // Bext Chunk for Broadcast Wave Format
-    // char bextChunk[5];
-
-
-    // Format Chunk
-
-    // Check formatChunk for "fmt "
-    char formatChunk[5];
-    formatChunk[4] = '\0';
-    fread(formatChunk, sizeof(char), 4, audiofile);
-    if (strcmp(formatChunk, "fmt ") != 0)
+    do
     {
-        printf("Wrong format-chunk found (fmt ): %s\n", formatChunk);
-        return 2;
-    }
-    printf("Format ID:  %s\n", formatChunk);
+        // Read chunkID (4 letter code + terminator)
+        char ckID[5];
+        ckID[4] = '\0';
+        fread(&ckID, sizeof(DWORD), 1, audiofile);
 
-    // Check format length
-    uint32_t fmtlength;
-    fread(&fmtlength, sizeof(uint32_t), 1, audiofile);
-    printf("fmt length: %i Bytes\n", fmtlength);
+        // Read chunkSize
+        DWORD ckSize;
+        fread(&ckSize, sizeof(DWORD), 1, audiofile);
 
-    // Check format tag: 0x0001 -> PCM
-    uint16_t wFormatTag;
-    fread(&wFormatTag, sizeof(uint16_t), 1, audiofile);
-    if (wFormatTag != 1)
-    {
-        printf("Only PCM files are supported: wFormatTag = %i\n", wFormatTag);
-        return 2;
-    }
-    printf("Format Tag: %i (PCM)\n", wFormatTag);
+        // Allocate memory for chunkData
+        BYTE ckData[ckSize];
 
-    // Get audio channels
-    uint16_t wChannels;
-    fread(&wChannels, sizeof(uint16_t), 1, audiofile);
-    printf("Audio channels: %i\n", wChannels);
+        if (strcmp(ckID, "fmt ") == 0)
+        {
+            printf("\nFound Format Chunk with %i Bytes\n", ckSize);
+            printf("----------------------------------------\n\n");
+            // Read Format Chunk
+            fmt fmtCk;
+            fread(&fmtCk, sizeof(fmt), 1, audiofile);
+            // Print Format Chunk Information
+            printf("          wFormatTag %i\n", fmtCk.wFormatTag);
+            printf("           nChannels %i\n", fmtCk.nChannels);
+            printf("      nSamplesPerSec %i\n", fmtCk.nSamplesPerSec);
+            printf("     nAvgBytesPerSec %i\n", fmtCk.nAvgBytesPerSec);
+        }
+        else if (strcmp(ckID, "bext") == 0)
+        {
+            printf("\nFound BEXT Chunk with %i Bytes\n", ckSize);
+            printf("----------------------------------------\n\n");
+            // Read BEXT chunk
 
-    // Get audio channels
-    uint32_t dwSamplesPerSec;
-    fread(&dwSamplesPerSec, sizeof(uint32_t), 1, audiofile);
-    printf("Samplerate: %i\n", dwSamplesPerSec);
+            bext bextCk;
+            fread(&bextCk, sizeof(bext), 1, audiofile);
+            printf("Description \n%s\n", printstring(bextCk.Description, sizeof(bextCk.Description)));
+            printf("          Originator %s\n", printstring(bextCk.Originator, sizeof(bextCk.Originator)));
+            printf(" OriginatorReference %s\n", printstring(bextCk.OriginatorReference, sizeof(bextCk.OriginatorReference)));
+            printf("     OriginationDate %s\n", printstring(bextCk.OriginationDate, sizeof(bextCk.OriginationDate)));
+            printf("     OriginationTime %s\n", printstring(bextCk.OriginationTime, sizeof(bextCk.OriginationTime)));
+            printf("    TimeReferenceLow %i\n", bextCk.TimeReferenceLow);
+            printf("   TimeReferenceHigh %i\n", bextCk.TimeReferenceHigh);
+            printf("             Version %i\n", bextCk.Version);
+            printf("                UMID %s\n", printbyte(bextCk.UMID, sizeof(bextCk.UMID)));
+            printf("       LoudnessValue %i\n", bextCk.LoudnessValue);
+            printf("       LoudnessRange %i\n", bextCk.LoudnessRange);
+            printf("    MaxTruePeakLevel %i\n", bextCk.MaxTruePeakLevel);
+            printf("MaxMomentaryLoudness %i\n", bextCk.MaxMomentaryLoudness);
+            printf("MaxShortTermLoudness %i\n", bextCk.MaxShortTermLoudness);
+            printf("            Reserved %s\n", printstring(bextCk.Reserved, sizeof(bextCk.Reserved)));
+            printf("       CodingHistory %s\n", bextCk.CodingHistory);
 
-    // Get average bytes per second, e.g. 2 X 16 * 44100 / 8
-    uint32_t dwAvgBytesPerSec;
-    fread(&dwAvgBytesPerSec, sizeof(uint32_t), 1, audiofile);
-    printf("Average Bytes / sec: %i\n", dwAvgBytesPerSec);
+            // Rewind file pointer by 2 bytes to compensate offset:
+            // Size according to ckSize = 602 vs. sizeof(bext) = 604
+            fseek(audiofile, -2, SEEK_CUR);
+        }
+        else if (fread(&ckData, sizeof(BYTE), ckSize, audiofile) == 0)
+        {
+            printf("\nEnd of File.\n");
+            return 0;
+        }
+        else if (strcmp(ckID, "PAD ") == 0)
+        {
+            // Origin: ???
+            printf("\nFound PAD Chunk with %i Bytes\n", ckSize);
+            printf("----------------------------------------\n");
+            printf("PAD: %s\n", ckData);
+        }
+        else if (strcmp(ckID, "minf") == 0)
+        {
+            // Origin: Pro Tools ???
+            printf("\nFound minf Chunk with %i Bytes\n", ckSize);
+            printf("----------------------------------------\n");
+            printf("minf: %s\n", ckData);
+        }
+        else if (strcmp(ckID, "elmo") == 0)
+        {
+            // Origin: Pro Tools ???
+            printf("\nFound elmo Chunk with %i Bytes\n", ckSize);
+            printf("----------------------------------------\n");
+            printf("elmo: %s\n", ckData);
+        }
+        else if (strcmp(ckID, "data") == 0)
+        {
+            printf("\nFound data Chunk with %i Bytes\n", ckSize);
+            printf("----------------------------------------\n");
+            printf("data: %s\n", ckData);
+        }        
+        else if (strcmp(ckID, "iXML") == 0)
+        {
+            // Origin: Wave Agent / BWFXML
+            printf("\nFound iXML Chunk with %i Bytes\n", ckSize);
+            printf("----------------------------------------\n");
 
-    // Get block allign
-    uint16_t wBlockAlign;
-    fread(&wBlockAlign, sizeof(uint16_t), 1, audiofile);
-    printf("Block align: %x\n", wBlockAlign);
+            printf("iXML: %s\n", ckData);
+        }
+        else
+        {
+            printf("\nFound unknown Chunk >%s< with %i Bytes\n", ckID, ckSize);
+            printf("----------------------------------------\n");
+            // Read generic chunk
+            printf("Unknown: %s\n", ckData);
+        }
+    } while (1);
 
-    // Get block allign
-    uint16_t bitspersample;
-    fread(&bitspersample, sizeof(uint16_t), 1, audiofile);
-    printf("bitspersample: %x\n", bitspersample);
-
-    char padChunk[5];
-    padChunk[4] = '\0';
-    fread(padChunk, sizeof(char), 4, audiofile);
-    if (strcmp(padChunk, "fmt ") != 0)
-    {
-        printf("Wrong format-chunk found (fmt ): %s\n", padChunk);
-        return 2;
-    }
-    printf("padChunk ID:  %s\n", padChunk);
-
+    // Close file, free memory
+    fclose(audiofile);
 }
