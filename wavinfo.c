@@ -10,7 +10,9 @@ typedef uint16_t WORD;
 typedef uint32_t DWORD;
 typedef int32_t  LONG;
 
-// Chunks are the building blocks of RIFF
+// Chunks are the building blocks of RIFF, can be nested, optional or mandatory, ignored if unknown
+// I am not using this generic struct but chunk-specific structs for extracting data from ckData
+// Therefor NOT touching the data twice, 1. Read to ckData 2. extract ckData into specific struct
 typedef struct ck
 {
     DWORD ckID;             // Chunk type identifier
@@ -54,7 +56,7 @@ const char* printbyte(BYTE unprintable[], int len);
 const char* printstring(CHAR *unprintable, int len);
 
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
 
     printf("\n========================================\n");
@@ -123,7 +125,8 @@ int main(int argc, char *argv[])
     printf("Riff Type:  %s\n", riffType);
 
     // Chunks are defined by ckID and ckSize followed by the ckData with a length of ckSize
-    // Consume Chunk, analyse chID and call according reader function
+    // Read Chunk, analyse chID and fill ckData into according data structure if fmt or bext chunks
+    // ChunkIDs that do not have an associated data structure are printed as ASCII for reference
 
     do
     {
