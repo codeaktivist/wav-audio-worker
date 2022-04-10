@@ -28,6 +28,7 @@ typedef struct fmt
     DWORD nSamplesPerSec;   // Sampling rate
     DWORD nAvgBytesPerSec;  // For buffer estimation
     WORD nBlockAlign;       // Data block size
+    WORD wBitsPerSample;    // Number of bits per sample
 } fmt;
 
 // Broadcast wave file chunk (optional extension)
@@ -175,6 +176,8 @@ int main(int argc, char* argv[])
             printf("           nChannels: %i\n", fmtCk.nChannels);
             printf("      nSamplesPerSec: %i\n", fmtCk.nSamplesPerSec);
             printf("     nAvgBytesPerSec: %i\n", fmtCk.nAvgBytesPerSec);
+            printf("         nBlockAlign: %i\n", fmtCk.nBlockAlign);
+            printf("      wBitsPerSample: %i\n", fmtCk.wBitsPerSample);
         }
         // BEXT chunk
         else if (strcmp(ckID, "bext") == 0)
